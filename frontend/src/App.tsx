@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Project, Task, User, TaskStatus, TaskPriority } from './types';
 import { api } from './api';
 import { Header } from './components/Header';
@@ -7,6 +7,7 @@ import { PriorityFilter } from './components/PriorityFilter';
 import { KanbanBoard } from './components/KanbanBoard';
 import { CreateTaskModal } from './components/CreateTaskModal';
 import { AddUserModal } from './components/AddUserModal';
+import { UserLoginModal } from './components/UserLoginModal';
 import { ChatbotDrawer } from './components/ChatbotDrawer';
 import { Loader2, AlertCircle } from 'lucide-react';
 
@@ -18,6 +19,10 @@ export const App: React.FC = () => {
   const [selectedPriority, setSelectedPriority] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
+  // Active User & Permissions
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -27,6 +32,13 @@ export const App: React.FC = () => {
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
   const [isChatbotOpen, setIsChatbotOpen] = useState(false);
   const [chatbotInitialPrompt, setChatbotInitialPrompt] = useState<string | null>(null);
+
+  // Calculate current user permission in active project
+  const currentUserPermission: 'ADMIN' | 'MEMBER' | 'VIEWER' = useMemo(() => {
+    if (!currentUser || !currentProject) return 'ADMIN';
+    const member = currentProject.members.find((m) => m.userId === currentUser.id);
+    return member?.permission || 'MEMBER';
+  }, [currentUser, currentProject]);
 
   // Initial load
   const loadData = async (targetProjectId?: string) => {
@@ -48,6 +60,17 @@ export const App: React.FC = () => {
         ]);
         setTasks(taskList);
         setUsers(userList);
+
+        // Setup active logged in user
+        const storedUserId = localStorage.getItem('taskflow_user_id');
+        const foundUser = userList.find((u) => u.id === storedUserId);
+        if (foundUser) {
+          setCurrentUser(foundUser);
+        } else if (!currentUser && userList.length > 0) {
+          // Default to Alex (or first user)
+          setCurrentUser(userList[0]);
+          localStorage.setItem('taskflow_user_id', userList[0].id);
+        }
       }
     } catch (err: any) {
       console.error('Failed to load application data:', err);
@@ -77,6 +100,27 @@ export const App: React.FC = () => {
     }
   };
 
+  // Switch User Profile
+  const handleSelectUser = (user: User) => {
+    setCurrentUser(user);
+    localStorage.setItem('taskflow_user_id', user.id);
+  };
+
+  // Login by Email
+  const handleLoginByEmail = async (email: string) => {
+    const loggedUser = await api.loginUser({ email });
+    const fullUser = users.find((u) => u.id === loggedUser.id) || {
+      id: loggedUser.id,
+      name: loggedUser.name,
+      email: loggedUser.email,
+      avatar: loggedUser.avatar,
+      role: loggedUser.role,
+      inProgressCount: loggedUser.inProgressCount,
+    };
+    setCurrentUser(fullUser);
+    localStorage.setItem('taskflow_user_id', fullUser.id);
+  };
+
   // Drag and Drop movement
   const handleTaskMoved = async (
     taskId: string,
@@ -84,6 +128,11 @@ export const App: React.FC = () => {
     newOrder: number,
     reorderedIds: string[]
   ) => {
+    if (currentUserPermission === 'VIEWER') {
+      alert('Viewers have read-only access. You cannot move tasks.');
+      return;
+    }
+
     // 1. Optimistic update
     setTasks((prev) => {
       const target = prev.find((t) => t.id === taskId);
@@ -104,7 +153,6 @@ export const App: React.FC = () => {
       }
     } catch (err) {
       console.error('Failed to persist task move:', err);
-      // Revert if error
       if (currentProject) {
         const freshTasks = await api.getTasks(currentProject.id);
         setTasks(freshTasks);
@@ -114,6 +162,11 @@ export const App: React.FC = () => {
 
   // Delete Task
   const handleDeleteTask = async (taskId: string) => {
+    if (currentUserPermission === 'VIEWER') {
+      alert('Viewers have read-only access. You cannot delete tasks.');
+      return;
+    }
+
     try {
       setTasks((prev) => prev.filter((t) => t.id !== taskId));
       await api.deleteTask(taskId);
@@ -139,6 +192,7 @@ export const App: React.FC = () => {
     const newTask = await api.createTask({
       ...data,
       projectId: currentProject.id,
+      assignedUserId: data.assignedUserId || currentUser?.id,
     });
     setTasks((prev) => [newTask, ...prev]);
     const updatedUsers = await api.getUsers(currentProject.id);
@@ -166,6 +220,10 @@ export const App: React.FC = () => {
 
   // Open quick add for a specific column
   const handleQuickAddTask = (status: TaskStatus) => {
+    if (currentUserPermission === 'VIEWER') {
+      alert('Viewers cannot create tasks. Please switch to an Admin or Member account.');
+      return;
+    }
     setDefaultTaskStatus(status);
     setIsCreateTaskOpen(true);
   };
@@ -205,7 +263,7 @@ export const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-[#080C15]">
-      {/* Header */}
+      {/* Header with User Login / Switcher Profile */}
       <Header
         currentProject={currentProject}
         projects={projects}
@@ -219,7 +277,10 @@ export const App: React.FC = () => {
           setChatbotInitialPrompt(null);
           setIsChatbotOpen(true);
         }}
+        onOpenLoginModal={() => setIsLoginModalOpen(true)}
         burnoutCount={burnoutUsers.length}
+        currentUser={currentUser}
+        currentUserPermission={currentUserPermission}
       />
 
       {/* Main Container */}
@@ -263,6 +324,7 @@ export const App: React.FC = () => {
           onTaskMoved={handleTaskMoved}
           onDeleteTask={handleDeleteTask}
           onQuickAddTask={handleQuickAddTask}
+          currentUserPermission={currentUserPermission}
         />
       </main>
 
@@ -280,6 +342,16 @@ export const App: React.FC = () => {
         onClose={() => setIsAddMemberOpen(false)}
         onAddUser={handleAddMember}
         currentProject={currentProject}
+      />
+
+      <UserLoginModal
+        isOpen={isLoginModalOpen}
+        onClose={() => setIsLoginModalOpen(false)}
+        users={users}
+        currentUser={currentUser}
+        currentProject={currentProject}
+        onSelectUser={handleSelectUser}
+        onLoginByEmail={handleLoginByEmail}
       />
 
       <ChatbotDrawer

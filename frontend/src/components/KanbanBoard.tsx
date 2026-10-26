@@ -3,12 +3,14 @@ import { Task, TaskStatus } from '../types';
 import { DragDropContext, DropResult } from '@hello-pangea/dnd';
 import { KanbanColumn } from './KanbanColumn';
 import confetti from 'canvas-confetti';
+import { Eye } from 'lucide-react';
 
 interface KanbanBoardProps {
   tasks: Task[];
   onTaskMoved: (taskId: string, newStatus: TaskStatus, newOrder: number, reorderedIds: string[]) => void;
   onDeleteTask: (id: string) => void;
   onQuickAddTask: (status: TaskStatus) => void;
+  currentUserPermission?: 'ADMIN' | 'MEMBER' | 'VIEWER';
 }
 
 export const KanbanBoard: React.FC<KanbanBoardProps> = ({
@@ -16,7 +18,10 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   onTaskMoved,
   onDeleteTask,
   onQuickAddTask,
+  currentUserPermission = 'ADMIN',
 }) => {
+  const isViewer = currentUserPermission === 'VIEWER';
+
   const columns: Array<{ id: TaskStatus; title: string }> = [
     { id: 'TODO', title: 'To-Do' },
     { id: 'IN_PROGRESS', title: 'In Progress' },
@@ -24,6 +29,11 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   ];
 
   const handleDragEnd = (result: DropResult) => {
+    if (isViewer) {
+      alert('You are currently viewing in Read-Only mode (Viewer role). Log in as Admin or Member to move tasks.');
+      return;
+    }
+
     const { source, destination, draggableId } = result;
 
     if (!destination) return;
@@ -68,25 +78,36 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   };
 
   return (
-    <DragDropContext onDragEnd={handleDragEnd}>
-      <div className="flex flex-col lg:flex-row items-stretch gap-5 overflow-x-auto pb-4">
-        {columns.map((col) => {
-          const colTasks = tasks
-            .filter((t) => t.status === col.id)
-            .sort((a, b) => a.order - b.order);
+    <div className="space-y-3">
+      {isViewer && (
+        <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-900/90 border border-slate-800 text-slate-300 text-xs">
+          <Eye className="w-4 h-4 text-sky-400 flex-shrink-0" />
+          <span>
+            <strong>Viewer Mode:</strong> You are browsing with read-only permissions. Drag-and-drop and task deletions are locked. Use the profile switcher in the top right to switch to an Admin or Member.
+          </span>
+        </div>
+      )}
 
-          return (
-            <KanbanColumn
-              key={col.id}
-              id={col.id}
-              title={col.title}
-              tasks={colTasks}
-              onDeleteTask={onDeleteTask}
-              onQuickAddTask={onQuickAddTask}
-            />
-          );
-        })}
-      </div>
-    </DragDropContext>
+      <DragDropContext onDragEnd={handleDragEnd}>
+        <div className="flex flex-col lg:flex-row items-stretch gap-5 overflow-x-auto pb-4">
+          {columns.map((col) => {
+            const colTasks = tasks
+              .filter((t) => t.status === col.id)
+              .sort((a, b) => a.order - b.order);
+
+            return (
+              <KanbanColumn
+                key={col.id}
+                id={col.id}
+                title={col.title}
+                tasks={colTasks}
+                onDeleteTask={isViewer ? () => alert('Viewers cannot delete tasks.') : onDeleteTask}
+                onQuickAddTask={onQuickAddTask}
+              />
+            );
+          })}
+        </div>
+      </DragDropContext>
+    </div>
   );
 };

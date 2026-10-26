@@ -1,12 +1,13 @@
 import React from 'react';
-import { Project } from '../types';
+import { Project, User } from '../types';
 import { 
   KanbanSquare, 
   Plus, 
   UserPlus, 
   Sparkles, 
   AlertTriangle,
-  FolderKanban
+  FolderKanban,
+  ChevronDown
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -16,7 +17,10 @@ interface HeaderProps {
   onOpenCreateTask: () => void;
   onOpenAddMember: () => void;
   onOpenChatbot: () => void;
+  onOpenLoginModal: () => void;
   burnoutCount: number;
+  currentUser: User | null;
+  currentUserPermission: 'ADMIN' | 'MEMBER' | 'VIEWER';
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -26,8 +30,23 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenCreateTask,
   onOpenAddMember,
   onOpenChatbot,
+  onOpenLoginModal,
   burnoutCount,
+  currentUser,
+  currentUserPermission,
 }) => {
+  const getPermissionBadge = (perm: 'ADMIN' | 'MEMBER' | 'VIEWER') => {
+    switch (perm) {
+      case 'ADMIN':
+        return 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40';
+      case 'VIEWER':
+        return 'bg-slate-500/20 text-slate-300 border-slate-500/40';
+      case 'MEMBER':
+      default:
+        return 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40';
+    }
+  };
+
   return (
     <header className="border-b border-slate-800 bg-[#0B0F19]/90 backdrop-blur sticky top-0 z-30 px-6 py-3.5">
       <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -87,23 +106,31 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* Add User Button */}
-          <button
-            onClick={onOpenAddMember}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 text-xs font-medium transition"
-          >
-            <UserPlus className="w-3.5 h-3.5 text-slate-400" />
-            <span>Add Member</span>
-          </button>
+          {/* Add User Button (Only visible for Admins) */}
+          {currentUserPermission === 'ADMIN' && (
+            <button
+              onClick={onOpenAddMember}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 text-xs font-medium transition"
+            >
+              <UserPlus className="w-3.5 h-3.5 text-slate-400" />
+              <span>Add Member</span>
+            </button>
+          )}
 
-          {/* Create Task Button */}
-          <button
-            onClick={onOpenCreateTask}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/25 transition active:scale-95"
-          >
-            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-            <span>Create Task</span>
-          </button>
+          {/* Create Task Button (Enabled for Admin and Member, disabled for Viewer) */}
+          {currentUserPermission !== 'VIEWER' ? (
+            <button
+              onClick={onOpenCreateTask}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/25 transition active:scale-95"
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>Create Task</span>
+            </button>
+          ) : (
+            <div className="px-3 py-1 rounded-lg bg-slate-800/50 border border-slate-700/60 text-slate-400 text-[11px] font-medium flex items-center gap-1.5">
+              <span>Read-Only Viewer</span>
+            </div>
+          )}
 
           {/* AI Copilot Button */}
           <button
@@ -116,6 +143,39 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="w-2 h-2 rounded-full bg-red-500 absolute -top-1 -right-1 animate-ping" />
             )}
           </button>
+
+          <div className="h-6 w-px bg-slate-800 hidden sm:block" />
+
+          {/* Logged-in User Switcher Pill */}
+          {currentUser && (
+            <button
+              onClick={onOpenLoginModal}
+              title="Click to switch active user / role"
+              className="flex items-center gap-2 pl-2 pr-3 py-1 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 hover:bg-slate-800/80 transition group"
+            >
+              <img
+                src={currentUser.avatar}
+                alt={currentUser.name}
+                className="w-6 h-6 rounded-full object-cover border border-slate-700"
+              />
+              <div className="text-left hidden sm:block">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-semibold text-slate-200 group-hover:text-white transition">
+                    {currentUser.name}
+                  </span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase tracking-wider border ${getPermissionBadge(
+                      currentUserPermission
+                    )}`}
+                  >
+                    {currentUserPermission}
+                  </span>
+                </div>
+              </div>
+              <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-200 transition" />
+            </button>
+          )}
+
         </div>
 
       </div>

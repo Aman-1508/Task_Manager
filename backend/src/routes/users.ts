@@ -89,4 +89,52 @@ router.post('/', async (req, res) => {
   }
 });
 
+// POST user login by email or userId
+router.post('/login', async (req, res) => {
+  try {
+    const { email, userId } = req.body;
+
+    if (!email && !userId) {
+      return res.status(400).json({ error: 'Email or userId is required for login' });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: email ? { email: { equals: email, mode: 'insensitive' } } : { id: userId },
+      include: {
+        projectMemberships: {
+          include: { project: true },
+        },
+        tasks: {
+          select: { id: true, status: true, priority: true, title: true },
+        },
+      },
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found with provided credentials' });
+    }
+
+    const inProgressTasks = user.tasks.filter((t) => t.status === 'IN_PROGRESS');
+    const inProgressCount = inProgressTasks.length;
+
+    res.json({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      avatar: user.avatar,
+      role: user.role,
+      inProgressCount,
+      isBurnoutRisk: inProgressCount > 5,
+      projectMemberships: user.projectMemberships.map((m) => ({
+        projectId: m.projectId,
+        projectName: m.project.name,
+        permission: m.permission,
+      })),
+    });
+  } catch (error) {
+    console.error('Error logging in user:', error);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
 export default router;

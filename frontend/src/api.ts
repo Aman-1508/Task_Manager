@@ -93,6 +93,14 @@ export const api = {
     });
   },
 
+  async loginUser(credentials: { email?: string; userId?: string }): Promise<any> {
+    return handleFetch(`${API_BASE}/users/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(credentials),
+    });
+  },
+
   // Chatbot
   async sendChatMessage(message: string, projectId: string): Promise<any> {
     return handleFetch(`${API_BASE}/chatbot/message`, {
