@@ -1,0 +1,14 @@
+{
+  "name": "taskflow-kanban",
+  "version": "1.0.0",
+  "description": "Streamlined task management application with Kanban-style organization, workload balancing, and AI Copilot",
+  "private": true,
+  "scripts": {
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "db:push": "cd backend && npm run db:push",
+    "db:seed": "cd backend && npm run db:seed",
+    "backend": "cd backend && npm run dev",
+    "frontend": "cd frontend && npm run dev"
+  }
+}

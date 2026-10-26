@@ -1,0 +1,61 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String          @id @default(uuid())
+  name               String
+  email              String          @unique
+  avatar             String
+  role               String          @default("DEVELOPER")
+  projectMemberships ProjectMember[]
+  tasks              Task[]          @relation("AssignedTasks")
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+}
+
+model Project {
+  id          String          @id @default(uuid())
+  name        String
+  description String?
+  members     ProjectMember[]
+  tasks       Task[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model ProjectMember {
+  id         String   @id @default(uuid())
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission String   @default("MEMBER") // ADMIN, MEMBER, VIEWER
+  createdAt  DateTime @default(now())
+
+  @@unique([projectId, userId])
+}
+
+model Task {
+  id             String    @id @default(uuid())
+  title          String
+  description    String?
+  status         String    @default("TODO") // TODO, IN_PROGRESS, DONE
+  priority       String    @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  dueDate        DateTime?
+  order          Int       @default(0)
+  projectId      String
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignedUserId String?
+  assignedUser   User?     @relation("AssignedTasks", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  parentId       String?
+  parent         Task?     @relation("SubTasks", fields: [parentId], references: [id], onDelete: Cascade)
+  subtasks       Task[]    @relation("SubTasks")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
